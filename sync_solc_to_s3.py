@@ -14,7 +14,7 @@ from pathlib import Path
 import tempfile
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,16 +32,18 @@ class SolcS3Syncer:
         self.bucket = bucket
         self.base_url = "https://solc-bin.ethereum.org/linux-amd64"
         
-    def fetch_version_list(self) -> List[Dict]:
+    def fetch_version_list(self) -> List[Tuple[str, str]]:
         """获取官方版本列表"""
         logger.info("📥 获取官方Solidity版本列表...")
         try:
             response = requests.get(f"{self.base_url}/list.json", timeout=30)
             response.raise_for_status()
             data = response.json()
-            versions = data.get('releases', {})
+            builds = data.get('builds', [])
+            # 使用完整版本号格式：v0.8.30+commit.73712a01
+            versions = [(f"v{build['longVersion']}", build['path']) for build in builds]
             logger.info(f"✅ 找到 {len(versions)} 个版本")
-            return list(versions.items())
+            return versions
         except Exception as e:
             logger.error(f"❌ 获取版本列表失败: {e}")
             raise
