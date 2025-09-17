@@ -57,7 +57,7 @@ class SolcS3Syncer:
             return False
 
     def download_compiler(self, version: str, filename: str) -> Tuple[bytes, str]:
-        """下载编译器并计算哈希"""
+        """下载编译器并计算SHA256哈希"""
         url = f"{self.base_url}/{filename}"
         logger.info(f"📥 下载 {version}: {url}")
         
@@ -65,18 +65,18 @@ class SolcS3Syncer:
             response = requests.get(url, timeout=300)  # 5分钟超时
             response.raise_for_status()
             
-            # 计算MD5哈希
+            # 计算SHA256哈希
             compiler_data = response.content
-            md5_hash = hashlib.md5(compiler_data).hexdigest()
+            sha256_hash = hashlib.sha256(compiler_data).hexdigest()
             
-            logger.info(f"✅ 下载完成 {version} ({len(compiler_data)} bytes, hash: {md5_hash[:16]}...)")
-            return compiler_data, md5_hash
+            logger.info(f"✅ 下载完成 {version} ({len(compiler_data)} bytes, hash: {sha256_hash[:16]}...)")
+            return compiler_data, sha256_hash
             
         except Exception as e:
             logger.error(f"❌ 下载失败 {version}: {e}")
             raise
 
-    def upload_to_s3(self, version: str, compiler_data: bytes, md5_hash: str) -> bool:
+    def upload_to_s3(self, version: str, compiler_data: bytes, sha256_hash: str) -> bool:
         """上传编译器和哈希文件到S3"""
         try:
             # 上传编译器文件
@@ -91,7 +91,7 @@ class SolcS3Syncer:
             self.s3_client.put_object(
                 Bucket=self.bucket,
                 Key=f"{version}/sha256.hash",
-                Body=md5_hash.encode('utf-8'),
+                Body=sha256_hash.encode('utf-8'),
                 ContentType='text/plain'
             )
             
@@ -113,10 +113,10 @@ class SolcS3Syncer:
             
         try:
             # 下载编译器
-            compiler_data, md5_hash = self.download_compiler(version, filename)
+            compiler_data, sha256_hash = self.download_compiler(version, filename)
             
             # 上传到S3
-            return self.upload_to_s3(version, compiler_data, md5_hash)
+            return self.upload_to_s3(version, compiler_data, sha256_hash)
             
         except Exception as e:
             logger.error(f"❌ 处理版本 {version} 失败: {e}")
