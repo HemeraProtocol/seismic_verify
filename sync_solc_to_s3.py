@@ -13,6 +13,7 @@ import boto3
 from pathlib import Path
 import tempfile
 import logging
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple
 
@@ -48,6 +49,111 @@ class SolcS3Syncer:
             logger.error(f"❌ 获取版本列表失败: {e}")
             raise
 
+    def scan_local_compilers(self, local_dir: str) -> List[Tuple[str, str]]:
+        """扫描本地编译器文件"""
+        logger.info(f"📁 扫描本地编译器目录: {local_dir}")
+        local_path = Path(local_dir)
+        
+        if not local_path.exists():
+            logger.error(f"❌ 本地目录不存在: {local_dir}")
+            raise FileNotFoundError(f"本地目录不存在: {local_dir}")
+        
+        compilers = []
+        
+        # 扫描直接在目录下的 solc 文件
+        if (local_path / "solc").exists():
+            solc_file = local_path / "solc"
+            version = self.get_solc_version(str(solc_file))
+            if version:
+                compilers.append((version, str(solc_file)))
+                logger.info(f"✅ 找到编译器: {solc_file}")
+        
+        # 扫描所有文件
+        for item in local_path.iterdir():
+            if item.is_file() and (item.name == "solc" or item.name.startswith("solc")):
+                # 跳过已经处理过的根目录 solc 文件
+                if item.name == "solc" and item.parent == local_path:
+                    continue
+                    
+                version = self.get_solc_version(str(item))
+                if version:
+                    compilers.append((version, str(item)))
+                    logger.info(f"✅ 找到编译器: {item}")
+            elif item.is_dir():
+                # 查找子目录中的 solc 文件
+                solc_file = item / "solc"
+                if solc_file.exists():
+                    version = self.get_solc_version(str(solc_file))
+                    if version:
+                        compilers.append((version, str(solc_file)))
+                        logger.info(f"✅ 找到编译器: {solc_file}")
+        
+        logger.info(f"✅ 本地找到 {len(compilers)} 个编译器")
+        return compilers
+
+    def get_solc_version(self, solc_path: str) -> str:
+        """通过执行solc --version获取版本信息"""
+        try:
+            # 确保文件有执行权限
+            os.chmod(solc_path, 0o755)
+            
+            # 执行 solc --version
+            result = subprocess.run([solc_path, '--version'], 
+                                  capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                logger.error(f"❌ 执行 {solc_path} --version 失败: {result.stderr}")
+                return None
+            
+            # 解析版本信息，例如：Version: 0.8.29-develop.2025.9.18+commit.d4b8c7ae.Darwin.appleclang
+            version_line = None
+            for line in result.stdout.split('\n'):
+                if 'Version:' in line:
+                    version_line = line
+                    break
+            
+            if not version_line:
+                logger.error(f"❌ 无法从版本输出中找到版本信息: {result.stdout}")
+                return None
+            
+            # 提取版本号
+            version_part = version_line.split('Version:')[1].strip()
+            logger.info(f"🔍 原始版本信息: {version_part}")
+            
+            # 解析复杂版本格式，如：0.8.29-develop.2025.9.18+commit.d4b8c7ae.Darwin.appleclang
+            if '+commit.' in version_part:
+                # 分离主版本号和commit部分
+                main_part, commit_part = version_part.split('+commit.')
+                
+                # 提取主版本号（去除-develop等后缀）
+                if '-' in main_part:
+                    main_version = main_part.split('-')[0]
+                else:
+                    main_version = main_part
+                
+                # 提取commit hash（去除平台信息）
+                commit_hash = commit_part.split('.')[0]
+                
+                # 组合最终版本
+                version = f"v{main_version}+commit.{commit_hash}"
+            else:
+                # 处理没有commit的情况
+                if '-' in version_part:
+                    main_version = version_part.split('-')[0]
+                else:
+                    main_version = version_part.split('.')[0]
+                version = f"v{main_version}"
+            
+            logger.info(f"✅ 检测到版本: {version}")
+            return version
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ 执行 {solc_path} --version 超时")
+            return None
+        except Exception as e:
+            logger.error(f"❌ 获取版本信息失败 {solc_path}: {e}")
+            return None
+
     def check_s3_version_exists(self, version: str) -> bool:
         """检查S3中是否已存在该版本"""
         try:
@@ -76,6 +182,28 @@ class SolcS3Syncer:
             logger.error(f"❌ 下载失败 {version}: {e}")
             raise
 
+    def read_local_compiler(self, version: str, file_path: str) -> Tuple[bytes, str]:
+        """读取本地编译器文件并计算SHA256哈希"""
+        logger.info(f"📁 读取本地编译器 {version}: {file_path}")
+        
+        try:
+            local_file = Path(file_path)
+            if not local_file.exists():
+                raise FileNotFoundError(f"本地文件不存在: {file_path}")
+            
+            # 读取文件内容
+            compiler_data = local_file.read_bytes()
+            
+            # 计算SHA256哈希
+            sha256_hash = hashlib.sha256(compiler_data).hexdigest()
+            
+            logger.info(f"✅ 读取完成 {version} ({len(compiler_data)} bytes, hash: {sha256_hash[:16]}...)")
+            return compiler_data, sha256_hash
+            
+        except Exception as e:
+            logger.error(f"❌ 读取本地文件失败 {version}: {e}")
+            raise
+
     def upload_to_s3(self, version: str, compiler_data: bytes, sha256_hash: str) -> bool:
         """上传编译器和哈希文件到S3"""
         try:
@@ -102,9 +230,9 @@ class SolcS3Syncer:
             logger.error(f"❌ 上传失败 {version}: {e}")
             return False
 
-    def process_version(self, version_data: Tuple[str, str]) -> bool:
+    def process_version(self, version_data: Tuple[str, str], is_local: bool = False) -> bool:
         """处理单个版本"""
-        version, filename = version_data
+        version, filename_or_path = version_data
         
         # 检查是否已存在
         if self.check_s3_version_exists(version):
@@ -112,8 +240,12 @@ class SolcS3Syncer:
             return True
             
         try:
-            # 下载编译器
-            compiler_data, sha256_hash = self.download_compiler(version, filename)
+            if is_local:
+                # 读取本地编译器
+                compiler_data, sha256_hash = self.read_local_compiler(version, filename_or_path)
+            else:
+                # 下载编译器
+                compiler_data, sha256_hash = self.download_compiler(version, filename_or_path)
             
             # 上传到S3
             return self.upload_to_s3(version, compiler_data, sha256_hash)
@@ -139,7 +271,7 @@ class SolcS3Syncer:
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_version = {
-                executor.submit(self.process_version, version_data): version_data[0] 
+                executor.submit(self.process_version, version_data, False): version_data[0] 
                 for version_data in versions
             }
             
@@ -164,13 +296,53 @@ class SolcS3Syncer:
             if len(failed_versions) > 10:
                 logger.info(f"   ... 还有 {len(failed_versions) - 10} 个失败版本")
 
+    def sync_local_compilers(self, local_dir: str, max_workers: int = 3):
+        """同步本地编译器到S3"""
+        logger.info(f"🚀 开始同步本地编译器到S3: {local_dir}")
+        
+        # 扫描本地编译器
+        compilers = self.scan_local_compilers(local_dir)
+        
+        if not compilers:
+            logger.warning("⚠️  未找到任何本地编译器文件")
+            return
+        
+        # 并发处理
+        success_count = 0
+        failed_versions = []
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_version = {
+                executor.submit(self.process_version, compiler_data, True): compiler_data[0] 
+                for compiler_data in compilers
+            }
+            
+            for future in as_completed(future_to_version):
+                version = future_to_version[future]
+                try:
+                    if future.result():
+                        success_count += 1
+                    else:
+                        failed_versions.append(version)
+                except Exception as e:
+                    logger.error(f"❌ 版本 {version} 处理异常: {e}")
+                    failed_versions.append(version)
+        
+        # 输出结果
+        logger.info(f"\n📊 本地同步完成:")
+        logger.info(f"   ✅ 成功: {success_count}")
+        logger.info(f"   ❌ 失败: {len(failed_versions)}")
+        
+        if failed_versions:
+            logger.info(f"   失败版本: {', '.join(failed_versions)}")
+
 def main():
     """主函数"""
     # S3配置 - 从环境变量或直接修改这里
-    S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "AKIAX37LO3SFHDGA6I7R")
-    S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "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")
+    S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "AKIAX37LO3SFAHM5OVW3")
+    S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "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")
     S3_REGION = os.getenv("AWS_REGION", "us-east-1")
-    S3_BUCKET = os.getenv("S3_BUCKET", "seismic-solidity")
+    S3_BUCKET = os.getenv("S3_BUCKET", "solidity-public")
     
     # 解析命令行参数
     import argparse
@@ -178,6 +350,7 @@ def main():
     parser.add_argument("--limit", type=int, help="限制处理的版本数量（用于测试）")
     parser.add_argument("--workers", type=int, default=3, help="并发数量（默认3）")
     parser.add_argument("--bucket", type=str, default=S3_BUCKET, help="S3 bucket名称")
+    parser.add_argument("--local-dir", type=str, help="本地编译器目录路径（例如：/Users/user/solc_compiler）")
     args = parser.parse_args()
     
     # 验证S3凭证
@@ -186,9 +359,15 @@ def main():
         sys.exit(1)
     
     try:
-        # 创建同步器并执行同步
+        # 创建同步器
         syncer = SolcS3Syncer(S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, args.bucket)
-        syncer.sync_all_versions(max_workers=args.workers, limit=args.limit)
+        
+        if getattr(args, 'local_dir'):
+            # 本地模式：同步本地编译器
+            syncer.sync_local_compilers(args.local_dir, max_workers=args.workers)
+        else:
+            # 远程模式：从官方仓库同步
+            syncer.sync_all_versions(max_workers=args.workers, limit=args.limit)
         
     except KeyboardInterrupt:
         logger.info("🛑 用户中断同步")

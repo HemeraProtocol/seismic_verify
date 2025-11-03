@@ -19,7 +19,7 @@ refresh_versions_schedule = "0 0 * * * * *"
 
 # For S3 fetcher:
 [solidity.fetcher]
-s3 = { access_key = "AKIAX37LO3SFHDGA6I7R", secret_key = "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", region = "us-east-1", bucket = "seismic-solidity" }
+s3 = { access_key = "AKIAX37LO3SFAHM5OVW3", secret_key = "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", region = "us-east-1", bucket = "solidity-public" }
 
 [vyper]
 enabled = false
