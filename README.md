@@ -1,16 +1,16 @@
 ## S3 Support for Solidity Compilers
 
-This project has been enhanced with S3 support for hosting Solidity compilers, allowing for better performance and reliability compared to downloading from the official repository each time.
+This project enhances smart contract verification by providing S3 support for hosting Solidity compilers. Using S3 storage offers better performance and reliability compared to downloading compilers from the official repository for each verification request.
 
 ### sync_solc_to_s3.py Script
 
-The `sync_solc_to_s3.py` script synchronizes Solidity compilers from the official Ethereum repository to an S3 bucket. This script:
+The `sync_solc_to_s3.py` script synchronizes Solidity compilers from the official Ethereum repository to your S3 bucket. Key features include:
 
 - Downloads all available Linux AMD64 Solidity compiler versions from `https://solc-bin.ethereum.org/linux-amd64/`
-- Uploads them to S3 with the required directory structure for the smart-contract-verifier
+- Uploads compilers to S3 with the proper directory structure required by smart-contract-verifier
 - Generates SHA256 hash files for integrity verification
-- Supports concurrent downloads/uploads for better performance
-- Skips already existing versions to avoid unnecessary re-uploads
+- Supports concurrent downloads and uploads for improved performance
+- Intelligently skips existing versions to prevent unnecessary re-uploads
 
 #### Usage
 
@@ -28,13 +28,13 @@ python3 sync_solc_to_s3.py --local-dir /Users/will9709/code/my_contract/solc_com
 
 #### Local Compiler Support
 
-The script supports uploading local Solidity compilers to S3. It automatically detects version information by executing `solc --version` on each compiler binary found. The script can scan:
+The script also supports uploading local Solidity compilers to S3. It automatically detects version information by executing `solc --version` on each compiler binary. The script can scan:
 
 - Direct `solc` files in the specified directory
-- Any files starting with `solc` (e.g., `solc-0.8.19`, `solc_old`)
+- Files starting with `solc` (e.g., `solc-0.8.19`, `solc_old`)
 - Subdirectories containing `solc` files
 
-Version detection automatically extracts the correct format (e.g., `v0.4.10+commit.9e8cc01b`) from the compiler's output, ensuring proper S3 directory structure.
+Version detection automatically extracts the correct format (e.g., `v0.4.10+commit.9e8cc01b`) from the compiler's output, ensuring the proper S3 directory structure is maintained.
 
 #### Environment Variables
 
@@ -45,7 +45,7 @@ Version detection automatically extracts the correct format (e.g., `v0.4.10+comm
 
 ### S3 Configuration
 
-The S3 support is configured in `smart-contract-verifier-server/config/base.toml`:
+Configure S3 support in `smart-contract-verifier-server/config/base.toml`:
 
 ```toml
 [solidity.fetcher]
@@ -57,11 +57,11 @@ s3 = {
 }
 ```
 
-This replaces the default list fetcher that downloads from the official repository, providing faster and more reliable access to Solidity compilers.
+This configuration replaces the default list fetcher that downloads from the official repository, providing faster and more reliable access to Solidity compilers.
 
-### Running the service locally
+### Running the Service Locally
 
-To start the smart-contract-verifier-server with debug logging:
+Start the smart-contract-verifier-server with debug logging:
 
 ```bash
 RUST_LOG=debug SMART_CONTRACT_VERIFIER__CONFIG=./smart-contract-verifier-server/config/base.toml cargo run --bin smart-contract-verifier-server
@@ -71,13 +71,13 @@ The service will start on port 8050 by default.
 
 ### API Verification
 
-After starting the service, you can verify it's working correctly using these endpoints:
+After starting the service, verify it's working correctly using these endpoints:
 
 #### 1. Check Available Solidity Versions
 ```bash
 curl http://localhost:8050/api/v2/verifier/solidity/versions
 ```
-This endpoint should return a JSON list of available Solidity compiler versions from your S3 bucket.
+This endpoint returns a JSON list of available Solidity compiler versions from your S3 bucket.
 
 #### 2. Verify Smart Contract
 ```bash
@@ -90,13 +90,13 @@ curl --location 'http://localhost:8050/api/v2/verifier/solidity/sources:verify-s
   "input": "{\"language\":\"Solidity\",\"sources\":{\"test_example.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.0;\\n\\ncontract ShieldedWallet {\\n    suint256 private balance;\\n    \\n    function addFunds(suint256 amount) external {\\n        balance += amount;\\n    }\\n}\"}},\"settings\":{\"optimizer\":{\"enabled\":true,\"runs\":200},\"outputSelection\":{\"*\":{\"*\":[\"abi\",\"evm.bytecode\",\"evm.deployedBytecode\",\"metadata\"]}}}}"
 }'
 ```
-This endpoint performs smart contract verification using the specified compiler version. A successful response should return `"status": "SUCCESS"` along with contract details including ABI, source code, and compilation artifacts.
+This endpoint performs smart contract verification using the specified compiler version. A successful response returns `"status": "SUCCESS"` along with contract details including ABI, source code, and compilation artifacts.
 
 #### 3. Health Check
 ```bash
 curl http://localhost:8050/health
 ```
-This endpoint verifies the service is running and responding properly.
+This endpoint confirms the service is running and responding properly.
 
 *Based on: https://github.com/blockscout/blockscout-rs/blob/main/smart-contract-verifier/README.md*
 
