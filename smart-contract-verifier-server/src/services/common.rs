@@ -75,16 +75,24 @@ fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region
 fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
     let region = new_region(settings.region.clone(), settings.endpoint.clone())
         .ok_or_else(|| anyhow::anyhow!("got invalid region/endpoint settings"))?;
-    let bucket = Arc::new(Bucket::new(
-        &settings.bucket,
-        region,
+    
+    let credentials = if settings.access_key.is_none() && settings.secret_key.is_none() {
+        // For anonymous access to public buckets
+        Credentials::anonymous()?
+    } else {
         Credentials::new(
             settings.access_key.as_deref(),
             settings.secret_key.as_deref(),
             None,
             None,
             None,
-        )?,
+        )?
+    };
+    
+    let bucket = Arc::new(Bucket::new(
+        &settings.bucket,
+        region,
+        credentials,
     )?);
     Ok(bucket)
 }

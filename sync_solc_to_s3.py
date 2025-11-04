@@ -23,16 +23,29 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class SolcS3Syncer:
-    def __init__(self, access_key: str, secret_key: str, region: str, bucket: str):
+    def __init__(self, access_key: str = None, secret_key: str = None, region: str = "us-east-1", bucket: str = "solidity-public"):
         """Initialize S3 syncer"""
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name=region
-        )
+        if access_key and secret_key:
+            # Use provided credentials
+            self.s3_client = boto3.client(
+                's3',
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                region_name=region
+            )
+        else:
+            # Use anonymous access for public buckets
+            from botocore import UNSIGNED
+            from botocore.config import Config
+            self.s3_client = boto3.client(
+                's3',
+                region_name=region,
+                config=Config(signature_version=UNSIGNED)
+            )
         self.bucket = bucket
         self.base_url = "https://solc-bin.ethereum.org/linux-amd64"
+        #
+        # self.base_url = "https://solc-bin.ethereum.org/macosx-amd64"
         
     def fetch_version_list(self) -> List[Tuple[str, str]]:
         """Fetch official version list"""
@@ -339,11 +352,11 @@ class SolcS3Syncer:
 
 def main():
     """Main function"""
-    # S3 configuration - from environment variables or modify directly here
-    S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "AKIAX37LO3SFAHM5OVW3")
-    S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "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")
+    # S3 configuration - from environment variables only (no hardcoded defaults)
+    S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "")
+    S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     S3_REGION = os.getenv("AWS_REGION", "us-east-1")
-    S3_BUCKET = os.getenv("S3_BUCKET", "solidity-public")
+    S3_BUCKET = os.getenv("S3_BUCKET", "seismic-solidity-public-linux")
     
     # Parse command line arguments
     import argparse
@@ -352,16 +365,23 @@ def main():
     parser.add_argument("--workers", type=int, default=3, help="Number of concurrent workers (default 3)")
     parser.add_argument("--bucket", type=str, default=S3_BUCKET, help="S3 bucket name")
     parser.add_argument("--local-dir", type=str, help="Local compiler directory path (e.g.: /Users/user/solc_compiler)")
+    parser.add_argument("--anonymous", action="store_true", help="Use anonymous access for public buckets (no credentials required)")
     args = parser.parse_args()
     
-    # Validate S3 credentials
-    if not all([S3_ACCESS_KEY, S3_SECRET_KEY]):
+    # Validate S3 credentials (skip if using anonymous access)
+    if not args.anonymous and not all([S3_ACCESS_KEY, S3_SECRET_KEY]):
         logger.error("❌ Please set AWS credential environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
+        logger.error("    Or use --anonymous flag for accessing public buckets")
         sys.exit(1)
     
     try:
         # Create syncer
-        syncer = SolcS3Syncer(S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, args.bucket)
+        if args.anonymous:
+            logger.info("🌐 Using anonymous access for public bucket")
+            syncer = SolcS3Syncer(None, None, S3_REGION, args.bucket)
+        else:
+            logger.info("🔐 Using AWS credentials")
+            syncer = SolcS3Syncer(S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, args.bucket)
         
         if getattr(args, 'local_dir'):
             # Local mode: sync local compilers
