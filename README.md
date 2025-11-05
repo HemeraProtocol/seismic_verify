@@ -38,8 +38,6 @@ Version detection automatically extracts the correct format (e.g., `v0.4.10+comm
 
 #### Environment Variables
 
-- `AWS_ACCESS_KEY_ID`: S3 access key
-- `AWS_SECRET_ACCESS_KEY`: S3 secret key  
 - `AWS_REGION`: S3 region (default: us-east-1)
 - `S3_BUCKET`: S3 bucket name (default: seismic-solidity)
 
@@ -50,10 +48,8 @@ Configure S3 support in `smart-contract-verifier-server/config/base.toml`:
 ```toml
 [solidity.fetcher]
 s3 = { 
-    access_key = "YOUR_ACCESS_KEY", 
-    secret_key = "YOUR_SECRET_KEY", 
     region = "us-east-1", 
-    bucket = "solidity-public" 
+    bucket = "seismic-solidity-public-mac" 
 }
 ```
 

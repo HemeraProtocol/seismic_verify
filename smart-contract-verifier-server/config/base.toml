@@ -19,7 +19,7 @@ refresh_versions_schedule = "0 0 * * * * *"
 
 # For S3 fetcher:
 [solidity.fetcher]
-s3 = { region = "us-east-1", bucket = "solidity-public" }
+s3 = { region = "us-east-1", bucket = "seismic-solidity-public-mac" }
 
 [vyper]
 enabled = false
