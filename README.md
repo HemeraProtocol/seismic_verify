@@ -53,7 +53,7 @@ s3 = {
 }
 ```
 
-This configuration replaces the default list fetcher that downloads from the official repository, providing faster and more reliable access to Solidity compilers.
+This configuration replaces the default list fetcher that downloads from the official repository, providing faster and more reliable access to Solidity compilers. For linux platform, use bucket seismic-solidity-public-mac
 
 ### Running the Service Locally
 
