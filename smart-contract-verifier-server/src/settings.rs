@@ -88,7 +88,7 @@ pub struct ListFetcherSettings {
     pub list_url: Url,
 }
 
-#[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug)]
+#[derive(Deserialize, Default, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct S3FetcherSettings {
     pub access_key: Option<String>,
@@ -96,6 +96,42 @@ pub struct S3FetcherSettings {
     pub region: Option<String>,
     pub endpoint: Option<String>,
     pub bucket: String,
+}
+
+// Settings may be formatted by startup diagnostics; credentials must never appear.
+impl std::fmt::Debug for S3FetcherSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("S3FetcherSettings")
+            .field("access_key", &self.access_key.as_ref().map(|_| "[REDACTED]"))
+            .field("secret_key", &self.secret_key.as_ref().map(|_| "[REDACTED]"))
+            .field("region", &self.region)
+            .field("endpoint", &self.endpoint)
+            .field("bucket", &self.bucket)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod credential_logging_tests {
+    use super::*;
+
+    #[test]
+    fn s3_debug_redacts_credentials() {
+        let secret = S3FetcherSettings {
+            access_key: Some("test-sensitive-access-value".into()),
+            secret_key: Some("test-sensitive-secret-value".into()),
+            bucket: "compiler-test-bucket".into(),
+            ..Default::default()
+        };
+        let mut settings = Settings::default();
+        settings.solidity.fetcher = FetcherSettings::S3(secret);
+        for output in [format!("{:?}", settings), format!("{:#?}", settings)] {
+            assert!(!output.contains("test-sensitive-access-value"));
+            assert!(!output.contains("test-sensitive-secret-value"));
+            assert!(output.contains("[REDACTED]"));
+            assert!(output.contains("compiler-test-bucket"));
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

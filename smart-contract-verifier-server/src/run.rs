@@ -85,7 +85,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let solidity_verifier = match settings.solidity.enabled {
         true => {
             println!("✅ Solidity verifier enabled, initializing...");
-            println!("🔧 Fetcher settings: {:?}", settings.solidity.fetcher);
             Some(Arc::new(
                 SolidityVerifierService::new(settings.solidity, compilers_lock.clone()).await?,
             ))
