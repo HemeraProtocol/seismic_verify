@@ -96,3 +96,30 @@ This endpoint confirms the service is running and responding properly.
 
 *Based on: https://github.com/blockscout/blockscout-rs/blob/main/smart-contract-verifier/README.md*
 
+
+### GCP Cloud Storage
+
+The S3 fetcher supports a custom endpoint. For a private GCS bucket, use a
+bucket-scoped `roles/storage.objectViewer` service account and its HMAC keys.
+Supply keys through secret-backed environment variables, never checked-in TOML:
+
+```text
+SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__S3__ENDPOINT=https://storage.googleapis.com
+SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__S3__REGION=auto
+SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__S3__BUCKET=influencer-272204-seismic-solidity-linux
+SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__S3__ACCESS_KEY=<secret reference>
+SMART_CONTRACT_VERIFIER__SOLIDITY__FETCHER__S3__SECRET_KEY=<secret reference>
+```
+
+Use the build that redacts S3 credentials from Debug output and removes startup
+configuration dumps before supplying credentials. Existing compiler SHA-256
+validation and the hourly version refresh remain enabled.
+
+The publisher can use `--endpoint-url https://storage.googleapis.com` (or
+`S3_ENDPOINT_URL`) with `--bucket influencer-272204-seismic-solidity-linux` and
+`AWS_REGION=auto`. Publishing requires a separate writer identity; the core's
+reader credential cannot upload. Preserve the `<version>/solc` and
+`<version>/sha256.hash` layout. For Seismic-specific compilers use `--local-dir`
+with the approved Seismic binaries; syncing standard upstream Solidity releases
+is not a substitute for publishing Seismic compiler releases. No automated
+publisher is created by changing this configuration.

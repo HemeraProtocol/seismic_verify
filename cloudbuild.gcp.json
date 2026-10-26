@@ -1,0 +1,23 @@
+{
+  "steps": [
+    {
+      "name": "gcr.io/cloud-builders/docker",
+      "args": [
+        "build",
+        "-f",
+        "Dockerfile.gcp",
+        "-t",
+        "us-central1-docker.pkg.dev/influencer-272204/seismic-migration-poc/seismic-core-smart-contract-verifier:gcs-20261026",
+        "."
+      ]
+    }
+  ],
+  "images": [
+    "us-central1-docker.pkg.dev/influencer-272204/seismic-migration-poc/seismic-core-smart-contract-verifier:gcs-20261026"
+  ],
+  "timeout": "3600s",
+  "options": {
+    "machineType": "E2_HIGHCPU_32",
+    "diskSizeGb": 100
+  }
+}

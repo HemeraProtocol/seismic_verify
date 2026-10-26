@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class SolcS3Syncer:
-    def __init__(self, access_key: str = None, secret_key: str = None, region: str = "us-east-1", bucket: str = "solidity-public"):
+    def __init__(self, access_key: str = None, secret_key: str = None, region: str = "us-east-1", bucket: str = "solidity-public", endpoint_url: str = None):
         """Initialize S3 syncer"""
         if access_key and secret_key:
             # Use provided credentials
@@ -31,7 +31,8 @@ class SolcS3Syncer:
                 's3',
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
-                region_name=region
+                region_name=region,
+                endpoint_url=endpoint_url
             )
         else:
             # Use anonymous access for public buckets
@@ -40,7 +41,8 @@ class SolcS3Syncer:
             self.s3_client = boto3.client(
                 's3',
                 region_name=region,
-                config=Config(signature_version=UNSIGNED)
+                config=Config(signature_version=UNSIGNED),
+                endpoint_url=endpoint_url
             )
         self.bucket = bucket
         self.base_url = "https://solc-bin.ethereum.org/linux-amd64"
@@ -357,6 +359,7 @@ def main():
     S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     S3_REGION = os.getenv("AWS_REGION", "us-east-1")
     S3_BUCKET = os.getenv("S3_BUCKET", "seismic-solidity-public-linux")
+    S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
     
     # Parse command line arguments
     import argparse
@@ -364,6 +367,7 @@ def main():
     parser.add_argument("--limit", type=int, help="Limit number of versions to process (for testing)")
     parser.add_argument("--workers", type=int, default=3, help="Number of concurrent workers (default 3)")
     parser.add_argument("--bucket", type=str, default=S3_BUCKET, help="S3 bucket name")
+    parser.add_argument("--endpoint-url", default=S3_ENDPOINT_URL, help="S3-compatible endpoint, e.g. https://storage.googleapis.com")
     parser.add_argument("--local-dir", type=str, help="Local compiler directory path (e.g.: /Users/user/solc_compiler)")
     parser.add_argument("--anonymous", action="store_true", help="Use anonymous access for public buckets (no credentials required)")
     args = parser.parse_args()
@@ -378,10 +382,10 @@ def main():
         # Create syncer
         if args.anonymous:
             logger.info("🌐 Using anonymous access for public bucket")
-            syncer = SolcS3Syncer(None, None, S3_REGION, args.bucket)
+            syncer = SolcS3Syncer(None, None, S3_REGION, args.bucket, args.endpoint_url)
         else:
             logger.info("🔐 Using AWS credentials")
-            syncer = SolcS3Syncer(S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, args.bucket)
+            syncer = SolcS3Syncer(S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION, args.bucket, args.endpoint_url)
         
         if getattr(args, 'local_dir'):
             # Local mode: sync local compilers

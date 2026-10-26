@@ -1,0 +1,13 @@
+FROM ghcr.io/blockscout/services-base:latest AS build
+WORKDIR /app
+COPY . .
+ENV SVM_RELEASES_LIST_JSON=/app/build-support/solc-stable-list.json
+RUN cargo test --locked --release -p smart-contract-verifier-server --lib s3_debug_redacts_credentials
+RUN cargo build --locked --release --bin smart-contract-verifier-server
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends libssl3 ca-certificates && rm -rf /var/lib/apt/lists/* && groupadd app && useradd -g app app
+WORKDIR /app
+COPY --from=build /app/target/release/smart-contract-verifier-server /app/smart-contract-verifier-server
+COPY smart-contract-verifier-server/config/base.toml /app/config.toml
+USER app
+CMD ["./smart-contract-verifier-server"]

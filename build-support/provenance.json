@@ -1,0 +1,7 @@
+{
+  "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/linux-amd64/list.json",
+  "source_sha256": "b44c1d0e598ed0bcbf4ee49c86c5ae85b63718c1591689b02d12d7a11d45a2ac",
+  "selection": "build.path is named in official releases map; no prerelease entries",
+  "stable_versions": 94,
+  "purpose": "Build-time svm-rs-builds constants only. Runtime compiler catalog comes from configured GCS bucket."
+}
